@@ -1,0 +1,208 @@
+---
+title: "Userguide to the `tcgsaseq` R package"
+author: "Anthony Devaux, Boris Hejblum"
+date: "`r Sys.Date()`"
+output:
+  rmarkdown::html_vignette:
+    number_sections: yes
+    toc: yes
+vignette: >
+  %\VignetteIndexEntry{tcgsaseq_userguide} 
+  %\VignetteEngine{knitr::rmarkdown} 
+  %\VignetteEncoding{UTF-8}
+---
+  
+```{r pre, echo=FALSE, warning=FALSE, include=FALSE}
+library(knitr)
+library(tcgsaseq)
+is_check <- ("CheckExEnv" %in% search()) || any(c("_R_CHECK_TIMINGS_", "_R_CHECK_LICENSE_") %in% names(Sys.getenv()))
+knitr::opts_chunk$set(echo = TRUE, eval=!is_check, cache=TRUE)
+data(baduel_5gs)
+```
+
+# Overview of tcgsaseq
+
+The `tcgsaseq` `R` package is a principled, model-free, and efficient method for detecting longitudinal changes in RNA-seq gene sets defined _a priori_. The method identifies those gene sets whose expression varies over time. `tcgsaseq` is based on an original variance component score test accounting for both covariates and heteroscedasticity without assuming any specific parametric distribution for the (transformed) counts. For more details, check the [publish article in Biostatistics](https://academic.oup.com/biostatistics/article/18/4/589/3065599).  
+
+To illustrate this method, we use the data arising from *Baduel et al., 2016* to measure time-course gene set expression of the plant *Arabidopsis arenosa* through RNA-seq. The goal of this study is to compare the different flowering strategies between two populations of this plant denoted KA and TBG.
+
+# Getting started using tcgsaseq
+
+Required inputs :
+
+* The RNA-seq expression data matrix
+* The covariate matrix containing the model covariates
+* The design matrix containing the variables to be tested
+* **In case of gene set analysis**, the gene set object
+
+## RNA-seq expression data
+
+This matrix contains the RNA-seq expression data (in cells) for each genes (in rows) of each samples (in columns). The data can be the raw RNA-seq counts or preprocessed expressions. The dimensions of this matrix should be n x G with n number of samples and G number of genes.
+
+Here we are the part of data from *Baduel et al., 2016*. 
+
+```{r data, echo=FALSE}
+expr_norm_corr[1:5,1:5]
+```
+
+This data contains 2 454 genes and 48 samples. 
+
+```{r dim_data}
+dim(expr_norm_corr)
+```
+
+
+## Model covariates matrix
+
+This matrix contains the variables which compose the nonparametric regression. The first column should be an intercept (n-length vector of 1) and can be follow-up by unique variables and interaction variables (combinations of several variables). All variables should be type as numeric in this matrix. The dimensions of this matrix should be n x p for n samples and p covariates variables.
+
+## Design matrix
+
+This matrix contained the variables to be tested. The dimensions should be n x K for the n samples and the K variables to be tested.
+
+## Gene set object
+
+A gene set is a group of genes either sharing the same biological function. 
+It enables to detect different gene expression and seems to be more powerful than a gene-by-gene analysis. 
+Several definitions of groups have been made, in particular here we will focus on the following:
+
+- Chaussabel's modules (*Chaussabel et al., 2008*)
+- Gene Ontology database (*Ashburner et al., 2000*)
+- Kyoto Encyclopedia of Genes and Genomes database (*Kanehisa et Goto, 2000*)
+
+In *Baduel et al., 2016* dataset, we use 2 gene sets from Gene Ontology database (*Ashburner et al., 2000*) plus 3 self-built gene sets by the authors.  
+
+The gene set object is a `gmt` format containing:
+
+- the name of the gene set
+
+```{r name_geneset}
+head(baduel_gmt$geneset.name)
+```
+
+
+- the description of the gene set, such as biological function
+
+```{r desc_geneset}
+head(baduel_gmt$geneset.description)
+```
+
+
+- the list of genes inside each gene set (an exemple for the gene set named "ColdResp")
+
+```{r gene_geneset}
+head(baduel_gmt$genesets[["ColdResp"]])
+```
+
+One can either use already existing `gmt` objects, or build their own. To self-build your `gmt` object, you have to prepare a `.gmt` file. This file format is the tab delimited file which can be created with [this helpful website](http://software.broadinstitute.org/cancer/software/gsea/wiki/index.php/Data_formats#GMT:_Gene_Matrix_Transposed_file_format_.28.2A.gmt.29) from the Broad Institute. In this file, one row represents one gene set with:
+
+- Column 1: name of the gene set
+- Column 2: description of the gene set
+- Remaining columns: list of genes included in the gene set
+
+Next, to import the `.gmt` file into R, you need to run the `GSA.read.gmt()` function 
+from the `GSA` package. More details on the `GSA` help package.
+
+
+# Gene set analysis : tcgsa_seq function
+
+Our goal is to figure out the different flowering strategies between the two populations of *Arabidopsis arenosa* (denoted KA and TBG) and specially which gene sets have a different activation between those populations, adjusted for the plant age and the cold exposure.
+
+## Data preparation
+
+### RNA-seq expression data
+
+First of all, to compute the `tcgsa_seq` function, we have to transform the raw RNA-seq counts into preprocessed expressions, except if the data are already preprocessed. In this case, `preprocessed` argument should be `TRUE` in `tcgsa_seq` function. If `preprocessed` is `FALSE`, $log_2\left( 10^6*\frac{0.5+y}{1+\sum(y)} \right)$ transformation is automatically computed on the data.
+
+For our RNA-seq expressions, we have to apply only the log2 transformation :
+
+```{r log2_trans}
+expr_log2 <- log2(expr_norm_corr+1)
+```
+
+### Covariates matrix
+
+To build the covariates matrix from the regression model, several variables should be created :
+
+* an intercept : `Intercept` (n-length vector of 1)
+
+```{r tcgsaseq_intercept}
+design$Intercept <- rep(1,nrow(design))
+```
+
+* interaction(s) : `Vernalized_Population` and `AgeWeeks_Population` from `Vernalized`, `Population` and `AgeWeeks` variables.
+
+```{r tcgsaseq_interaction}
+design$Vernalized_Population <- ifelse(design$Population=="KA"&design$Vernalized,1,0)
+design$AgeWeeks_Population <- ifelse(design$Population=="KA",design$AgeWeeks,0)
+```
+
+The covariates matrix (named `model_covar`) contains the different variables which form the regression model according to the question. It must contained an intercept (n-length vector of 1) to work. 
+
+```{r tcgsaseq_model}
+model_covar <- apply(as.matrix(design[, c("Intercept",
+                    "Vernalized", "AgeWeeks", "Vernalized_Population", "AgeWeeks_Population"),
+                    drop = FALSE]), 2, as.numeric)
+head(model_covar)
+```
+
+### Design matrix
+
+Design matrix is named for the matrix containing the different variables to be tested. To test the difference between the two populations of the plant, we keep the variable representing the population, but we should transform it as numeric. 
+
+```{r tcgsaseq_vartest}
+design$PopulationKA <- ifelse(design$Population=="KA",1,0)
+vartest <- as.matrix(design[, c("PopulationKA"), drop = FALSE])
+head(vartest)
+```
+
+### Gene set object
+
+In the case of our study, we used two gene sets from our `.gmt` object :
+* `VR_TBG` for the vernalized TBG
+* `DE_KAvsTBG` for the top 1% differentially expressed genes between KA and TBG
+
+```{r tcgsaseq_geneset}
+geneset <- baduel_gmt$genesets[c("VR_TBG","DE_KAvsTBG")]
+```
+
+## tcgsa_seq function
+
+The `tcgsa_seq` function provides the result of variance component score test for longitudinal gene set analysis. To run this function, it requires :
+
+* `y` : the RNA-seq expression matrix
+* `x` : the model covariates matrix
+* `phi` : the design matrix containing the variables to be tested
+* `genesets` : the list of genes (named by index or rownames of `y`) of each gene sets. The value of `genesets` argument could be `NULL` in case of no gene sets have been defined (i.e gene-wise analysis).
+
+```{r tcgsaseq_func}
+KAvsTBG <- tcgsa_seq(y = expr_log2, x = model_covar, phi = vartest,
+                    genesets = geneset, doPlot = FALSE,
+                    preprocessed = TRUE)
+```
+
+`pvals` value provides the raw and ajusted p-values for each gene sets selected in `genesets` argument. The adjusted p-values are computed according to `padjust_methods` argument (defaut option `BH` for Benjamini-Hochberg procedure for controlling the FDR).
+
+```{r tcgsaseq_pval}
+KAvsTBG$pvals
+```
+
+The `DE_KAvsTBG` gene set is significant rather than `VR_TBG` gene set (at a 5% threshold). In other words, we found that the gene set `DE_KAvsTBG` have a significant different activation between the two populations KA and TBG, adjusted for plant age and the cold exposure.
+
+# Gene by gene analysis : varseq function
+
+
+
+# References
+
+Agniel D, Hejblum BP, (2017) Variance component score test for time-course gene set analysis of longitudinal RNA-seq data. _Biostatistics_ 18(4):589-604.
+
+Ashburner M, Ball CA, Blake JA, Botstein D, Butler H, Cherry JM, et al., (2000) Gene Ontology: tool for the unification of biology. _Nat Genet_ 25(1):25-9. 
+
+Baduel P, Arnold B, Weisman CM, Hunter B et Bomblies K, (2016)  Habitat-associated life history
+and stress-tolerance variation in *Arabidopsis arenosa*. *Plant Physiology* **171**, 437–451.
+
+Chaussabel D, Quinn C, Shen J, Patel P, Glaser C, Baldwin N, et al., (2008) A Modular Analysis Framework for Blood Genomics Studies: Application to Systemic Lupus Erythematosus. _Immunity_ 29(1):150-64. 
+
+Kanehisa M, Goto S, (2000) KEGG: Kyoto Encyclopedia of Genes and Genomes. _Nucleic Acids Res_ 28(1):27-30.
+
