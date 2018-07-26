@@ -24,7 +24,7 @@ data(baduel_5gs)
 
 The `tcgsaseq` `R` package is a principled, model-free, and efficient method for detecting longitudinal changes in RNA-seq gene sets defined _a priori_. The method identifies those gene sets whose expression varies over time. `tcgsaseq` is based on an original variance component score test accounting for both covariates and heteroscedasticity without assuming any specific parametric distribution for the (transformed) counts. For more details, check the [publish article in Biostatistics](https://academic.oup.com/biostatistics/article/18/4/589/3065599).  
 
-To illustrate this method, we use the data arising from *Baduel et al., 2016* to measure time-course gene set expression of the plant *Arabidopsis arenosa* through RNA-seq. The goal of this study is to compare the different flowering strategies between two populations of this plant denoted KA and TBG.
+To illustrate the methods, we use the data arising from *Baduel et al., 2016* and *Dorr et al., 2015* to measure time-course gene set expression of the plant *Arabidopsis arenosa* and kidney transplant patients respectively. 
 
 # Getting started using tcgsaseq
 
@@ -33,24 +33,11 @@ Required inputs :
 * The RNA-seq expression data matrix
 * The covariate matrix containing the model covariates
 * The design matrix containing the variables to be tested
-* **In case of gene set analysis**, the gene set object
+* **In case of gene set analysis (tcgsa_seq function)**, the gene set object
 
 ## RNA-seq expression data
 
-This matrix contains the RNA-seq expression data (in cells) for each genes (in rows) of each samples (in columns). The data can be the raw RNA-seq counts or preprocessed expressions. The dimensions of this matrix should be n x G with n number of samples and G number of genes.
-
-Here we are the part of data from *Baduel et al., 2016*. 
-
-```{r data, echo=FALSE}
-expr_norm_corr[1:5,1:5]
-```
-
-This data contains 2 454 genes and 48 samples. 
-
-```{r dim_data}
-dim(expr_norm_corr)
-```
-
+This matrix contains the RNA-seq expression data (in cells) for each genes (in rows) of each samples (in columns). The data can be raw RNA-seq counts or preprocessed expressions. In case of raw RNA-seq counts, the data is automatically transform to **normalize data on reads per million (RPM)** in `tcgsa_seq` or `varseq` function. For the preprocessed expressions, `preprocessed` argument should be `TRUE` in the `tcgsa_seq` or `varseq` function's option. The dimensions of this matrix should be n x G with n number of samples and G number of genes.
 
 ## Model covariates matrix
 
@@ -70,29 +57,11 @@ Several definitions of groups have been made, in particular here we will focus o
 - Gene Ontology database (*Ashburner et al., 2000*)
 - Kyoto Encyclopedia of Genes and Genomes database (*Kanehisa et Goto, 2000*)
 
-In *Baduel et al., 2016* dataset, we use 2 gene sets from Gene Ontology database (*Ashburner et al., 2000*) plus 3 self-built gene sets by the authors.  
-
 The gene set object is a `gmt` format containing:
 
 - the name of the gene set
-
-```{r name_geneset}
-head(baduel_gmt$geneset.name)
-```
-
-
 - the description of the gene set, such as biological function
-
-```{r desc_geneset}
-head(baduel_gmt$geneset.description)
-```
-
-
-- the list of genes inside each gene set (an exemple for the gene set named "ColdResp")
-
-```{r gene_geneset}
-head(baduel_gmt$genesets[["ColdResp"]])
-```
+- the list of genes inside each gene set
 
 One can either use already existing `gmt` objects, or build their own. To self-build your `gmt` object, you have to prepare a `.gmt` file. This file format is the tab delimited file which can be created with [this helpful website](http://software.broadinstitute.org/cancer/software/gsea/wiki/index.php/Data_formats#GMT:_Gene_Matrix_Transposed_file_format_.28.2A.gmt.29) from the Broad Institute. In this file, one row represents one gene set with:
 
@@ -103,20 +72,17 @@ One can either use already existing `gmt` objects, or build their own. To self-b
 Next, to import the `.gmt` file into R, you need to run the `GSA.read.gmt()` function 
 from the `GSA` package. More details on the `GSA` help package.
 
+# Gene set analysis of RNA-seq data : tcgsa_seq function (from *Baduel et al., 2016*)
 
-# Gene set analysis : tcgsa_seq function
-
-Our goal is to figure out the different flowering strategies between the two populations of *Arabidopsis arenosa* (denoted KA and TBG) and specially which gene sets have a different activation between those populations, adjusted for the plant age and the cold exposure.
+`tcgsa_seq` is the main function of `tcgsaseq` package to compute gene set analysis. To give an example, we try to figure out the different flowering strategies between the two populations of *Arabidopsis arenosa* (denoted KA and TBG) and specially which gene sets have a different activation between those populations, adjusted for the plant age and the cold exposure (also called "Vernalization").
 
 ## Data preparation
 
 ### RNA-seq expression data
 
-First of all, to compute the `tcgsa_seq` function, we have to transform the raw RNA-seq counts into preprocessed expressions, except if the data are already preprocessed. In this case, `preprocessed` argument should be `TRUE` in `tcgsa_seq` function. If `preprocessed` is `FALSE`, $log_2\left( 10^6*\frac{0.5+y}{1+\sum(y)} \right)$ transformation is automatically computed on the data.
+First of all, to compute the `tcgsa_seq` function, our data should be either raw RNA-seq counts or preprocessed expressions. For our RNA-seq expressions, we have to apply only the log2 transformation to have preprocessed expressions :
 
-For our RNA-seq expressions, we have to apply only the log2 transformation :
-
-```{r log2_trans}
+```{r tcgsaseq_log2_trans}
 expr_log2 <- log2(expr_norm_corr+1)
 ```
 
@@ -150,13 +116,15 @@ head(model_covar)
 
 Design matrix is named for the matrix containing the different variables to be tested. To test the difference between the two populations of the plant, we keep the variable representing the population, but we should transform it as numeric. 
 
-```{r tcgsaseq_vartest}
+```{r tcgsaseq_design}
 design$PopulationKA <- ifelse(design$Population=="KA",1,0)
 vartest <- as.matrix(design[, c("PopulationKA"), drop = FALSE])
 head(vartest)
 ```
 
 ### Gene set object
+
+The gene set object include 2 gene sets from Gene Ontology database (*Ashburner et al., 2000*) plus 3 self-built gene sets by the authors.  
 
 In the case of our study, we used two gene sets from our `.gmt` object :
 * `VR_TBG` for the vernalized TBG
@@ -175,7 +143,7 @@ The `tcgsa_seq` function provides the result of variance component score test fo
 * `phi` : the design matrix containing the variables to be tested
 * `genesets` : the list of genes (named by index or rownames of `y`) of each gene sets. The value of `genesets` argument could be `NULL` in case of no gene sets have been defined (i.e gene-wise analysis).
 
-```{r tcgsaseq_func}
+```{r tcgsaseq_func, cache = TRUE}
 KAvsTBG <- tcgsa_seq(y = expr_log2, x = model_covar, phi = vartest,
                     genesets = geneset, doPlot = FALSE,
                     preprocessed = TRUE)
@@ -189,9 +157,79 @@ KAvsTBG$pvals
 
 The `DE_KAvsTBG` gene set is significant rather than `VR_TBG` gene set (at a 5% threshold). In other words, we found that the gene set `DE_KAvsTBG` have a significant different activation between the two populations KA and TBG, adjusted for plant age and the cold exposure.
 
-# Gene by gene analysis : varseq function
+# Gene-wise differential analysis of RNA-seq data : varseq function (from *Dorr et al., 2015*)
 
+`varseq` is the main function of `tcgsaseq` package to compute genewise analysis. To compute this function, the required inputs are the same as `tcgsa_seq` function except for `genesets` object.
 
+To illustrate this function, we use the dataset from *Dorr et al., 2015*. Gene expression was measured in the peripheral blood mononuclear cells of 32 kidney transplant patients at 4 time points: before transplantation, 1 week after transplantation, 3 months after transplantation and 6 months after transplantation. We try to figure out linear change in gene expression over time while adjusting for patient's age and gender on 32 kidney transplant patients. 
+
+## Data preparation
+
+We import the RNA-seq expression data and variables matrix from [the University of Minnesota Digital Conservancy (UDC) website](https://conservancy.umn.edu/).
+
+```{r varseq_import, cache = TRUE}
+FPKMs <- as.matrix(read.delim("http://conservancy.umn.edu/bitstream/handle/11299/177631.1/FPKMs.txt", row.names=1))
+clinical <- read.delim("http://conservancy.umn.edu/bitstream/handle/11299/177631.1/clinical.txt")
+head(clinical)
+```
+
+### RNA-seq expression data
+
+`FPKMs` contains the raw RNA-seq expression data and we transformed them into reads per million.
+
+```{r varseq_log2_trans}
+cs_fpkm <- colSums(FPKMs)
+TPMs <- (FPKMs/cs_fpkm)*10^6
+log2TPMs <- log2(TPMs + 1)
+```
+
+### Covariates matrix
+
+To build the covariates matrix from the regression model adjusted on the age and gender of kidney transplant patients, we only kept `age` and `gender` of the dataset :
+
+```{r varseq_covar}
+x <- as.matrix(clinical[,which(colnames(clinical)%in%c("age","gender"))])
+```
+
+### Design matrix
+
+We have to test changes in gene expression over time, so we built the design matrix from the variable reprensenting the different time measurement of peripheral blood mononuclear cells. It names `month` in the dataset.
+
+```{r varseq_design}
+phi <- cbind(clinical[, "month"])
+head(phi)
+```
+
+## varseq function
+
+The `varseq` function provides the result of variance component score test for longitudinal gene-by-gene analysis. To run this function, it requires :
+
+* `exprmat` : the RNA-seq expression matrix
+* `covariates` : the model covariates matrix
+* `variables2test` : the design matrix containing the variables to be tested
+
+We also built an other variable named `indiv` containing the identifiant of patients to pair the samples. This variable is used to use `sample_group` argument, an additional option of `varseq` function. 
+
+```{r varseq_group}
+indiv <- cbind(clinical[, "SID"])
+```
+
+```{r varseq_function, cache = TRUE, eval = FALSE}
+res_varseq <- varseq(exprmat = log2TPMs, covariates = x, variables2test = phi,
+                     preprocessed = TRUE,
+                     sample_group = indiv,
+                     doPlot = FALSE)
+```
+
+`pvals` value provides the raw and ajusted p-values for each genes. The adjusted p-values are computed according to `padjust_methods` argument (defaut option `BH` for Benjamini-Hochberg procedure for controlling the FDR).
+
+```{r varseq_pval}
+head(res_varseq$pvals)
+res_varseq_signi <- res_varseq$pvals[which(res_varseq$pvals$adjPval <= 0.05),]
+head(res_varseq_signi)
+```
+
+`varseq` function detect almost 2 500 genes as significant change in expression over time adjusted on the age and gender of kidney transplant patients (at a 5% threshold).
 
 # References
 
@@ -200,9 +238,10 @@ Agniel D, Hejblum BP, (2017) Variance component score test for time-course gene 
 Ashburner M, Ball CA, Blake JA, Botstein D, Butler H, Cherry JM, et al., (2000) Gene Ontology: tool for the unification of biology. _Nat Genet_ 25(1):25-9. 
 
 Baduel P, Arnold B, Weisman CM, Hunter B et Bomblies K, (2016)  Habitat-associated life history
-and stress-tolerance variation in *Arabidopsis arenosa*. *Plant Physiology* **171**, 437–451.
+and stress-tolerance variation in *Arabidopsis arenosa*. *Plant Physiology* **171**, 437-451.
 
 Chaussabel D, Quinn C, Shen J, Patel P, Glaser C, Baldwin N, et al., (2008) A Modular Analysis Framework for Blood Genomics Studies: Application to Systemic Lupus Erythematosus. _Immunity_ 29(1):150-64. 
 
-Kanehisa M, Goto S, (2000) KEGG: Kyoto Encyclopedia of Genes and Genomes. _Nucleic Acids Res_ 28(1):27-30.
+Dorr C, Wu B, Guan W, Muthusamy A, Sanghavi K, Schladt DP et al., (2015). Differentially expressed gene transcripts using RNA sequencing from the blood of immunosuppressed kidney allograft recipients. *PLoS ONE* **10**, 1-14.
 
+Kanehisa M, Goto S, (2000) KEGG: Kyoto Encyclopedia of Genes and Genomes. _Nucleic Acids Res_ 28(1):27-30.
