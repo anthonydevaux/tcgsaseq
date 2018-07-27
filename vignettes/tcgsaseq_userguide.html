@@ -12,7 +12,7 @@
 
 <meta name="author" content="Anthony Devaux, Boris Hejblum" />
 
-<meta name="date" content="2018-07-26" />
+<meta name="date" content="2018-07-27" />
 
 <title>Userguide to the tcgsaseq R package</title>
 
@@ -70,7 +70,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 
 <h1 class="title toc-ignore">Userguide to the <code>tcgsaseq</code> R package</h1>
 <h4 class="author"><em>Anthony Devaux, Boris Hejblum</em></h4>
-<h4 class="date"><em>2018-07-26</em></h4>
+<h4 class="date"><em>2018-07-27</em></h4>
 
 
 <div id="TOC">
@@ -264,10 +264,12 @@ log2TPMs &lt;-<span class="st"> </span><span class="kw">log2</span>(TPMs <span c
 </div>
 <div id="covariates-matrix-1" class="section level3">
 <h3><span class="header-section-number">4.1.2</span> Covariates matrix</h3>
+<p>To build the covariates matrix from the regression model adjusted on the age and gender of kidney transplant patients, we only kept <code>age</code> and <code>gender</code> of the dataset :</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">x &lt;-<span class="st"> </span><span class="kw">as.matrix</span>(clinical[,<span class="kw">which</span>(<span class="kw">colnames</span>(clinical)<span class="op">%in%</span><span class="kw">c</span>(<span class="st">&quot;age&quot;</span>,<span class="st">&quot;gender&quot;</span>))])</code></pre></div>
 </div>
 <div id="design-matrix-2" class="section level3">
 <h3><span class="header-section-number">4.1.3</span> Design matrix</h3>
-<p>We have to test changes in gene expression over time, so we built the design matrix from the time variable <code>month</code> in the dataset.</p>
+<p>We have to test changes in gene expression over time, so we built the design matrix from the variable reprensenting the different time measurement of peripheral blood mononuclear cells. It names <code>month</code> in the dataset.</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">phi &lt;-<span class="st"> </span><span class="kw">cbind</span>(clinical[, <span class="st">&quot;month&quot;</span>])
 <span class="kw">head</span>(phi)</code></pre></div>
 <pre><code>##      [,1]
@@ -281,10 +283,38 @@ log2TPMs &lt;-<span class="st"> </span><span class="kw">log2</span>(TPMs <span c
 </div>
 <div id="varseq-function" class="section level2">
 <h2><span class="header-section-number">4.2</span> varseq function</h2>
+<p>The <code>varseq</code> function provides the result of variance component score test for longitudinal gene-by-gene analysis. To run this function, it requires :</p>
+<ul>
+<li><code>exprmat</code> : the RNA-seq expression matrix</li>
+<li><code>covariates</code> : the model covariates matrix</li>
+<li><code>variables2test</code> : the design matrix containing the variables to be tested</li>
+</ul>
+<p>We also built an other variable named <code>indiv</code> containing the identifiant of patients to pair the samples. This variable is used to use <code>sample_group</code> argument, an additional option of <code>varseq</code> function.</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">indiv &lt;-<span class="st"> </span><span class="kw">cbind</span>(clinical[, <span class="st">&quot;SID&quot;</span>])</code></pre></div>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">res_varseq &lt;-<span class="st"> </span><span class="kw">varseq</span>(<span class="dt">exprmat =</span> y, <span class="dt">covariates =</span> x, <span class="dt">variables2test =</span> phi,
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">res_varseq &lt;-<span class="st"> </span><span class="kw">varseq</span>(<span class="dt">exprmat =</span> log2TPMs, <span class="dt">covariates =</span> x, <span class="dt">variables2test =</span> phi,
                      <span class="dt">preprocessed =</span> <span class="ot">TRUE</span>,
-                     <span class="dt">sample_group =</span> indiv)</code></pre></div>
+                     <span class="dt">sample_group =</span> indiv,
+                     <span class="dt">doPlot =</span> <span class="ot">FALSE</span>)</code></pre></div>
+<pre><code>## Computing the weights... Done!</code></pre>
+<p><code>pvals</code> value provides the raw and ajusted p-values for each genes. The adjusted p-values are computed according to <code>padjust_methods</code> argument (defaut option <code>BH</code> for Benjamini-Hochberg procedure for controlling the FDR).</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">head</span>(res_varseq<span class="op">$</span>pvals)</code></pre></div>
+<pre><code>##                           rawPval  adjPval
+## FAM138F                     0.387 0.961923
+## OR4F5                       0.599 1.000000
+## OR4F3                       0.475 1.000000
+## DDX11L1                     0.763 1.000000
+## WASH7P                      0.000 0.000000
+## LOC100132287,LOC100133331   0.000 0.000000</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">res_varseq_signi &lt;-<span class="st"> </span>res_varseq<span class="op">$</span>pvals[<span class="kw">which</span>(res_varseq<span class="op">$</span>pvals<span class="op">$</span>adjPval <span class="op">&lt;=</span><span class="st"> </span><span class="fl">0.05</span>),]
+<span class="kw">head</span>(res_varseq_signi)</code></pre></div>
+<pre><code>##                           rawPval adjPval
+## WASH7P                          0       0
+## LOC100132287,LOC100133331       0       0
+## LOC729737                       0       0
+## RER1                            0       0
+## DFFB                            0       0
+## KCNAB2                          0       0</code></pre>
+<p><code>varseq</code> function detect almost 2 500 genes as significant change in expression over time adjusted on the age and gender of kidney transplant patients (at a 5% threshold).</p>
 </div>
 </div>
 <div id="references" class="section level1">

@@ -214,7 +214,7 @@ We also built an other variable named `indiv` containing the identifiant of pati
 indiv <- cbind(clinical[, "SID"])
 ```
 
-```{r varseq_function, cache = TRUE, eval = FALSE}
+```{r varseq_function, cache = TRUE}
 res_varseq <- varseq(exprmat = log2TPMs, covariates = x, variables2test = phi,
                      preprocessed = TRUE,
                      sample_group = indiv,
