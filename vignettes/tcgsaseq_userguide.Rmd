@@ -189,6 +189,7 @@ To build the covariates matrix from the regression model adjusted on the age and
 
 ```{r varseq_covar}
 x <- as.matrix(clinical[,which(colnames(clinical)%in%c("age","gender"))])
+head(x)
 ```
 
 ### Design matrix
@@ -225,6 +226,11 @@ res_varseq <- varseq(exprmat = log2TPMs, covariates = x, variables2test = phi,
 
 ```{r varseq_pval}
 head(res_varseq$pvals)
+```
+
+We built `res_varseq_signi` to keep the significant genes at a 5% threshold.
+
+```{r varseq_pvalsignif}
 res_varseq_signi <- res_varseq$pvals[which(res_varseq$pvals$adjPval <= 0.05),]
 head(res_varseq_signi)
 ```

@@ -265,7 +265,15 @@ log2TPMs &lt;-<span class="st"> </span><span class="kw">log2</span>(TPMs <span c
 <div id="covariates-matrix-1" class="section level3">
 <h3><span class="header-section-number">4.1.2</span> Covariates matrix</h3>
 <p>To build the covariates matrix from the regression model adjusted on the age and gender of kidney transplant patients, we only kept <code>age</code> and <code>gender</code> of the dataset :</p>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">x &lt;-<span class="st"> </span><span class="kw">as.matrix</span>(clinical[,<span class="kw">which</span>(<span class="kw">colnames</span>(clinical)<span class="op">%in%</span><span class="kw">c</span>(<span class="st">&quot;age&quot;</span>,<span class="st">&quot;gender&quot;</span>))])</code></pre></div>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">x &lt;-<span class="st"> </span><span class="kw">as.matrix</span>(clinical[,<span class="kw">which</span>(<span class="kw">colnames</span>(clinical)<span class="op">%in%</span><span class="kw">c</span>(<span class="st">&quot;age&quot;</span>,<span class="st">&quot;gender&quot;</span>))])
+<span class="kw">head</span>(x)</code></pre></div>
+<pre><code>##           age gender
+## [1,] 60.92813      1
+## [2,] 38.04244      0
+## [3,] 38.04244      0
+## [4,] 38.04244      0
+## [5,] 33.16359      1
+## [6,] 33.16359      1</code></pre>
 </div>
 <div id="design-matrix-2" class="section level3">
 <h3><span class="header-section-number">4.1.3</span> Design matrix</h3>
@@ -305,6 +313,7 @@ log2TPMs &lt;-<span class="st"> </span><span class="kw">log2</span>(TPMs <span c
 ## DDX11L1                     0.763 1.000000
 ## WASH7P                      0.000 0.000000
 ## LOC100132287,LOC100133331   0.000 0.000000</code></pre>
+<p>We built <code>res_varseq_signi</code> to keep the significant genes at a 5% threshold.</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">res_varseq_signi &lt;-<span class="st"> </span>res_varseq<span class="op">$</span>pvals[<span class="kw">which</span>(res_varseq<span class="op">$</span>pvals<span class="op">$</span>adjPval <span class="op">&lt;=</span><span class="st"> </span><span class="fl">0.05</span>),]
 <span class="kw">head</span>(res_varseq_signi)</code></pre></div>
 <pre><code>##                           rawPval adjPval
